@@ -14,7 +14,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -66,7 +66,16 @@ def main():
     month = int(df['月'].mode()[0])
     max_day = int(df['日'].max())
     period = args.period or f'1-{max_day}日'
-    upd = args.date or date.today().isoformat()
+
+    # 年份从文件名（data/2026-10.xlsx）解析，不要硬编码：跨年时硬编码会静默把标题写错。
+    mfile = re.match(r'(\d{4})-(\d{1,2})', Path(args.xlsx).stem)
+    year = int(mfile.group(1)) if mfile else date.today().year
+    if mfile and int(mfile.group(2)) != month:
+        print(f'[compute] ⚠️  文件名月份 {mfile.group(2)} 与数据月份 {month} 不一致，以数据为准')
+
+    # 更新日期取北京时间：GitHub runner 默认 UTC，直接用 date.today() 在 UTC 16:00 之后会差一天。
+    BJ = timezone(timedelta(hours=8))
+    upd = args.date or datetime.now(BJ).date().isoformat()
 
     # ── 累计聚合 ──
     agg = df.groupby('主主播').agg(
@@ -138,12 +147,12 @@ def main():
     html, c1 = re.subn(r'      var DATA = \[.*?\n      \];', data_js, html, count=1, flags=re.S)
     html, c2 = re.subn(r'      var STATS = \{[^}]*\};', stats_js, html, count=1)
     html, c3 = re.subn(r'      var DAILY = \{.*?\};', daily_js, html, count=1, flags=re.S)
-    html = re.sub(r'2026年\d+月1-\d+日', f'2026年{month}月{period}', html)
+    html = re.sub(r'\d{4}年\d+月1-\d+日', f'{year}年{month}月{period}', html)
     html = re.sub(r'更新日期：\d{4}-\d\d-\d\d', f'更新日期：{upd}', html)
     Path(args.html).write_text(html, encoding='utf-8')
 
     print(f'[compute] 替换块 DATA={c1} STATS={c2} DAILY={c3}')
-    print(f'[compute] 周期 2026年{month}月{period} / 更新 {upd}')
+    print(f'[compute] 周期 {year}年{month}月{period} / 更新 {upd}')
     print(f'[compute] 基准 avgRoi={avg_roi:.4f} avgDur={avg_dur:.2f}')
     print('[compute] 排名：')
     for i, d in enumerate(rows, 1):

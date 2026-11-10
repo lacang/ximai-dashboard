@@ -148,6 +148,8 @@ def main():
     html, c2 = re.subn(r'      var STATS = \{[^}]*\};', stats_js, html, count=1)
     html, c3 = re.subn(r'      var DAILY = \{.*?\};', daily_js, html, count=1, flags=re.S)
     html = re.sub(r'\d{4}年\d+月1-\d+日', f'{year}年{month}月{period}', html)
+    # 人数也要跟着 TARGETS 走：写死 5 人但实际评 4 人，看板顶部会长期挂错数字。
+    html = re.sub(r'参与评级：\d+ 人', f'参与评级：{len(rows)} 人', html)
     html = re.sub(r'更新日期：\d{4}-\d\d-\d\d', f'更新日期：{upd}', html)
     Path(args.html).write_text(html, encoding='utf-8')
 

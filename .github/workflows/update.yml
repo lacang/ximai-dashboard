@@ -1,0 +1,54 @@
+name: 重算看板
+
+on:
+  push:
+    paths:
+      - 'data/**.xlsx'
+      - 'scripts/compute.py'
+  workflow_dispatch:
+    inputs:
+      xlsx:
+        description: '要重算的明细文件（留空则用最新的 data/*.xlsx）'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  recompute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: pip install pandas openpyxl
+
+      - name: 选择数据文件
+        id: pick
+        run: |
+          if [ -n "${{ inputs.xlsx }}" ]; then
+            F="${{ inputs.xlsx }}"
+          else
+            F=$(ls -1 data/*.xlsx | sort | tail -1)
+          fi
+          echo "file=$F" >> "$GITHUB_OUTPUT"
+          echo "使用 $F"
+
+      - name: 重算
+        run: python3 scripts/compute.py --xlsx "${{ steps.pick.outputs.file }}"
+
+      - name: 有变化就提交
+        run: |
+          if git diff --quiet index.html; then
+            echo "看板无变化"
+            exit 0
+          fi
+          git config user.name "dashboard-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add index.html
+          git commit -m "chore: 重算看板（${{ steps.pick.outputs.file }}）"
+          git push
